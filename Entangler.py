@@ -61,6 +61,39 @@ class OptimalEntangler(Entangler):
         
         circ.u3(next(pc), next(pc), next(pc), q[i])
         circ.u3(next(pc), next(pc), next(pc), q[j])
+        
+        
+
+class MSEntangler(Entangler):
+    """Entangler containing the MS gate and all single-qubit rotations.
+    """
+    def __init__(self, params=None):
+        self.n_params = 12
+        if params is None:
+            self.params = [0] * self.n_params
+        else:
+            self.set_params(params)
+
+            
+    def apply(self, q, circ, i, j, params):
+        if len(params) == self.n_params:
+            pc = cycle(params)
+        else:
+            raise ValueError('Incorrect number of parameters!')
+        circ.u3(next(pc), next(pc), next(pc), q[i])
+        circ.u3(next(pc), next(pc), next(pc), q[j])
+
+#         circ.cx(q[j], q[i])
+#         circ.rz(next(pc), q[i])
+#         circ.ry(next(pc), q[j])
+#         circ.cx(q[i], q[j])
+#         circ.ry(next(pc), q[j])
+#         circ.cx(q[j], q[i])
+        
+        circ.rxx(pi / 2, q[i], q[j])
+        
+        circ.u3(next(pc), next(pc), next(pc), q[i])
+        circ.u3(next(pc), next(pc), next(pc), q[j])
     
 
 class IsingEntangler(Entangler):
