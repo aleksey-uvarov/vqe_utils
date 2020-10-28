@@ -84,6 +84,33 @@ class Checkerboard(TNWithEntangler):
                 circ.barrier()
             circ.barrier()
         return circ
+    
+    
+class GateSequence(TNWithEntangler):
+    '''An ansatz constructed by applying parametrized two-qubit gates 
+    in the sequence specified by the list of qubit pairs'''
+    def __init__(self, q, c, entangler, pairs, params=None):
+        super().__init__(q, c, entangler)
+        self.pairs = pairs
+        self.n_tensors = len(pairs)
+        self.n_params = self.n_tensors * entangler.n_params
+        if params is None:
+            self.params = [0] * self.n_params
+        else:
+            self.set_params(params)
+            
+    def construct_circuit(self, params=None):
+        ps = params if params is not None else self.params
+        assert len(ps) == self.n_params, 'Incorrect number of parameters!'
+        pc = cycle(ps)
+        circ = QuantumCircuit(self.q, self.c)
+        
+        def bulknext(pc):
+            return ([next(pc) for j in range(self.entangler.n_params)])
+        
+        for i, pair in enumerate(self.pairs):
+            self.entangler.apply(self.q, circ, pair[0], pair[1], bulknext(pc))
+        return circ
 
     
 class RankOne(TensorNetwork):
