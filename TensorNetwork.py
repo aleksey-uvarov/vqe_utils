@@ -111,17 +111,11 @@ class GateSequence(TNWithEntangler):
         circ = QuantumCircuit(self.q, self.c)
         
         def bulknext(pc):
-            if not self.pre_gates:
-                return ([next(pc) for j in range(self.entangler.n_params)])
-            else:
-                for i in range(self.q.size):
-                    a = next(pc)
-                return ([next(pc) for j in range(self.entangler.n_params)])
-
+            return ([next(pc) for j in range(self.entangler.n_params)])
         
         if self.pre_gates:
             for i in range(self.q.size):
-                circ.ry(self.params[i], self.q[i])
+                circ.ry(next(pc), self.q[i])
         
         for i, pair in enumerate(self.pairs):
             self.entangler.apply(self.q, circ, pair[0], pair[1], bulknext(pc))
