@@ -88,12 +88,17 @@ class Checkerboard(TNWithEntangler):
     
 class GateSequence(TNWithEntangler):
     '''An ansatz constructed by applying parametrized two-qubit gates 
-    in the sequence specified by the list of qubit pairs'''
-    def __init__(self, q, c, entangler, pairs, params=None):
+    in the sequence specified by the list of qubit pairs
+    if pre_gate is true, an Ry is applied to each qubit beforehand
+    '''
+    def __init__(self, q, c, entangler, pairs, params=None, pre_gates=True):
         super().__init__(q, c, entangler)
         self.pairs = pairs
         self.n_tensors = len(pairs)
         self.n_params = self.n_tensors * entangler.n_params
+        self.pre_gates = pre_gates
+        if pre_gates:
+            self.n_params += q.size
         if params is None:
             self.params = [0] * self.n_params
         else:
@@ -106,7 +111,17 @@ class GateSequence(TNWithEntangler):
         circ = QuantumCircuit(self.q, self.c)
         
         def bulknext(pc):
-            return ([next(pc) for j in range(self.entangler.n_params)])
+            if not self.pre_gates:
+                return ([next(pc) for j in range(self.entangler.n_params)])
+            else:
+                for i in range(self.q.size):
+                    a = next(pc)
+                return ([next(pc) for j in range(self.entangler.n_params)])
+
+        
+        if self.pre_gates:
+            for i in range(self.q.size):
+                circ.ry(self.params[i], self.q[i])
         
         for i, pair in enumerate(self.pairs):
             self.entangler.apply(self.q, circ, pair[0], pair[1], bulknext(pc))
