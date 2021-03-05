@@ -16,16 +16,22 @@ Provider = None
 from typing import Callable, List
 
 sv_backend = Aer.get_backend("statevector_simulator")
+qasm_backend = Aer.get_backend("qasm_simulator")
 # gpu_backend = Provider.get_backend("statevector_simulator")
 gpu_backend = sv_backend
 # sv_backend = Aer.get_backend("statevector_simulator")
+# noisy_backend = Aer.get_backend(!!!)
 
 def measure_ham_2(circ, ham_dict=None, explicit_H=None, shots=1000, backend="cpu"):
     '''Measures the expected value of a Hamiltonian passed either as
     ham_dict (uses QASM backend) or as explH (uses statevector backend)
     '''
     if ham_dict is not None:
-        raise NotImplementedError("Use statevector backend for now")
+#         raise NotImplementedError("Use statevector backend for now")
+        E = 0
+        for key, value in ham_dict.items():
+            E += value * get_en_2(circ, key, shots=shots)
+        return E
     elif explicit_H is not None:
         if backend=="gpu":
             print("GPU support is disabled for now")
@@ -40,17 +46,47 @@ def measure_ham_2(circ, ham_dict=None, explicit_H=None, shots=1000, backend="cpu
         E = (state.T.conj() @ explicit_H @ state)[0,0].real
         return E
     else:
-        raise TypeError('pass at least something!')
+        raise TypeError('pass a dictionary or an explicit Hamiltonian matrix')
         
 
+def get_en_2(circuit_in, ham_string, shots=1000):
+    """Assumes that there are few"""
+    q = circuit_in.qregs[0]
+    c = circuit_in.cregs[0]
+    circ = QuantumCircuit(q, c)
+    
+    circ.data = []
+    
+    for i in range(len(ham_string)):
+        if ham_string[i] == 'X':
+            circ.h(q[i])
+        if ham_string[i] == 'Y':
+            circ.s(q[i])
+            circ.h(q[i])
+        if ham_string[i] != 'I':
+            circ.measure(q[i], c[i])
+    circ = circuit_in + circ
+    job = execute(circ, qasm_backend, shots=shots)
+    result = job.result()
+    answer = result.get_counts()
+    expected_en = 0
+    for key in answer.keys():
+        expected_en += answer[key] * (-1)**key.count('1') / shots
+    return expected_en
+    
+
 def build_objective_function(TN: TensorNetwork.TensorNetwork,
-                             explicit_H: ndarray, backend="cpu") -> Callable[[List[float]], float]:
+                             explicit_H: ndarray=None, 
+                             ham_dict: dict=None,
+                             shots=1000,
+                             backend="cpu") -> Callable[[List[float]], float]:
     '''
     Takes the tensor network, Hamiltonian and returns a function R^k -> R. 
+    Maybe todo: pass actual qiskit backends, not their string names
     '''
     def f(x):
         circ = TN.construct_circuit(x)
-        return float64(measure_ham_2(circ, explicit_H=explicit_H, backend=backend))
+        return float64(measure_ham_2(circ, explicit_H=explicit_H, ham_dict=ham_dict, backend=backend, shots=shots))
     return f
 
 def globalVQE_2(TN, ham_dict, use_explicit_H=True, n_calls=100, initial_circuit=None, verbose=True):
@@ -127,6 +163,8 @@ def restrained_objective_2(TN, free_parameters, default_vals, ham_dict=None, exp
             circ = initial_circuit + circ
         return measure_ham_2(circ, ham_dict=ham_dict, explicit_H=explicit_H)
     return f
+
+
 
 
 
