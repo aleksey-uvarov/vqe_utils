@@ -1,7 +1,18 @@
 from numpy import eye, array, diag, zeros, kron, complex64
 from numpy.linalg import eig, eigh
 from functools import reduce
+from itertools import product, combinations
 #from scipy.sparse import csr_matrix
+import numpy as np
+
+
+I = eye(2)
+Z = diag([1, -1])
+X = array([[0, 1], [1, 0]])
+Y = array([[0, -1j], [1j, 0]])
+paulis = (I, X, Y, Z)
+pauli_labels = ("I", "X", "Y", "Z")
+
 
 def ising_model(n_spins, J, hx):
     ham = {}
@@ -146,6 +157,32 @@ def explicit_hamiltonian(ham_dict):
         total_mat = energy * reduce(kron, matrices)
         H +=total_mat
     return H
+
+
+def H_to_pauli_dict(H, reversed=True):
+    """Takes a qubit Hamiltonian and returns its Pauli decomposition.
+    If reversed is True, the Pauli strings are reversed. I\'m not sure if 
+    the need for that stems from some bug in my code or from the endianness
+    conventions of Qiskit"""
+    assert(H.shape[0] == H.shape[1])
+    assert(np.isclose(np.log2(H.shape[0]) % 1, 0))
+    n_qubits = round(np.log2(H.shape[0]))
+    labels_iterator = product(pauli_labels, repeat=n_qubits)
+    matrices_iterator = product(paulis, repeat=n_qubits)
+    ham_dict = {}
+    for label_list, matrix_list in zip(labels_iterator, matrices_iterator):
+        key = reduce(str.__add__, label_list)
+        pauli_string = reduce(np.kron, matrix_list)
+        value = np.trace(pauli_string @ H) / 2**(n_qubits)
+        if value != 0:
+            ham_dict[key] = value.real
+            if not np.isclose(value.imag, 0):
+                raise ValueError("Only Hermitian matrices please")
+    if reversed:
+        return {k[::-1]: v for k, v in ham_dict.items()}
+    else:
+        return ham_dict 
+
 
 def exact_gs(ham_dict):
     H = explicit_hamiltonian(ham_dict)
