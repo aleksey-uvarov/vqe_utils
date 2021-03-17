@@ -64,7 +64,7 @@ def get_en_2(circuit_in, ham_string, shots=1000, **kwargs):
         if ham_string[i] == 'X':
             circ.h(q[i])
         if ham_string[i] == 'Y':
-            circ.s(q[i])
+            circ.sdg(q[i])
             circ.h(q[i])
         if ham_string[i] != 'I':
             circ.measure(q[i], c[i])
@@ -201,7 +201,7 @@ def get_en(q, c, ham_string, TN, shots=1000, circuit=None, pre_applied_circ=None
         if ham_string[i] == 'X':
             circ.h(q[i])
         if ham_string[i] == 'Y':
-            circ.s(q[i])
+            circ.sdg(q[i])
             circ.h(q[i])
         if ham_string[i] != 'I':
             circ.measure(q[i], c[i])
