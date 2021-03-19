@@ -94,7 +94,35 @@ class MSEntangler(Entangler):
         
         circ.u3(next(pc), next(pc), next(pc), q[i])
         circ.u3(next(pc), next(pc), next(pc), q[j])
+
     
+class MS_short(Entangler):
+    """Molmer-Sorensen gate surrounded by Rz and Rx"""
+    def __init__(self, params=None):
+        self.n_params = 8
+        if params is None:
+            self.params = [0] * self.n_params
+        else:
+            self.set_params(params)
+
+            
+    def apply(self, q, circ, i, j, params):
+        if len(params) == self.n_params:
+            pc = cycle(params)
+        else:
+            raise ValueError('Incorrect number of parameters!')
+        circ.rx(next(pc), q[i])
+        circ.rz(next(pc), q[i])
+        circ.rx(next(pc), q[j])
+        circ.rz(next(pc), q[j])
+        
+        circ.rxx(pi / 2, q[i], q[j])
+        
+        circ.rx(next(pc), q[i])
+        circ.rz(next(pc), q[i])
+        circ.rx(next(pc), q[j])
+        circ.rz(next(pc), q[j])
+
 
 class IsingEntangler(Entangler):
     """Entangler that uses the operators found in
@@ -156,7 +184,34 @@ class RyCZ(Entangler):
         circ.cz(q[i], q[j])
         circ.ry(next(pc), q[i])
         circ.ry(next(pc), q[j])
+        
 
+class ShortRyCZ(Entangler):
+    """A CZ gate, followed by two Ry's. When these gates are stacked, there is no redundancy"""
+    def __init__(self, params=None):
+        self.n_params = 2
+        if params is None:
+            self.params = [0] * self.n_params
+        else:
+            self.set_params(params)
+    
+    def apply(self, q, circ, i, j, params=None):
+        """
+        q - QuantumRegister
+        circ - QuantumCircuit
+        i, j - qubits to act on
+        """
+        if params is None:
+            pc = cycle(self.params)
+        else:
+            if len(params) == self.n_params:
+                pc = cycle(params)
+            else:
+                raise ValueError('Incorrect number of parameters!')
+        circ.cz(q[i], q[j])
+        circ.ry(next(pc), q[i])
+        circ.ry(next(pc), q[j])
+        
         
 class RyRyy(Entangler):
     def __init__(self, params=None):
