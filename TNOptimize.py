@@ -1,5 +1,5 @@
 from skopt import gp_minimize, forest_minimize, gbrt_minimize
-from scipy.optimize import minimize #, dual_annealing, shgo
+from scipy.optimize import minimize
 from qiskit import QuantumCircuit, Aer, execute
 from qiskit import QuantumRegister, ClassicalRegister
 import TensorNetwork
@@ -22,21 +22,21 @@ gpu_backend = sv_backend
 # sv_backend = Aer.get_backend("statevector_simulator")
 # noisy_backend = Aer.get_backend(!!!)
 
+
 def measure_ham_2(circ, ham_dict=None, explicit_H=None, shots=1000, backend="cpu", **kwargs):
     '''Measures the expected value of a Hamiltonian passed either as
     ham_dict (uses QASM backend) or as explH (uses statevector backend)
     '''
     if ham_dict is not None:
-#         raise NotImplementedError("Use statevector backend for now")
         E = 0
         for key, value in ham_dict.items():
             E += value * get_en_2(circ, key, shots=shots, **kwargs)
         return E
     elif explicit_H is not None:
-        if backend=="gpu":
+        if backend == "gpu":
             print("GPU support is disabled for now")
             job = execute(circ, gpu_backend) #Maybe no **kwargs here
-        elif backend=="cpu":
+        elif backend == "cpu":
             job = execute(circ, sv_backend, **kwargs) #Maybe no **kwargs here
         else:
             raise ValueError("gpu or cpu")
@@ -79,18 +79,18 @@ def get_en_2(circuit_in, ham_string, shots=1000, **kwargs):
     
 
 def build_objective_function(TN: TensorNetwork.TensorNetwork,
-                             explicit_H: ndarray=None, 
-                             ham_dict: dict=None,
+                             explicit_h: ndarray = None,
+                             ham_dict: dict = None,
                              shots=1000,
                              backend="cpu", **kwargs) -> Callable[[List[float]], float]:
     '''
     Takes the tensor network, Hamiltonian and returns a function R^k -> R. 
-    Maybe todo: pass actual qiskit backends, not their string names
+    Maybe pass actual qiskit backends, not their string names
     '''
     def f(x):
         circ = TN.construct_circuit(x)
-        return float64(measure_ham_2(circ, explicit_H=explicit_H, 
-                                     ham_dict=ham_dict, backend=backend, 
+        return float64(measure_ham_2(circ, explicit_H=explicit_h,
+                                     ham_dict=ham_dict, backend=backend,
                                      shots=shots, **kwargs))
     return f
 
@@ -150,7 +150,6 @@ def any_order_VQE_2(TN: TensorNetwork, params_order: list,
 
     return res.fun, vals
         
-    
 
 def restrained_objective_2(TN, free_parameters, default_vals, ham_dict=None, explicit_H=None, initial_circuit=None):
     '''Makes an objective function good for minimization. Locks most
@@ -168,173 +167,3 @@ def restrained_objective_2(TN, free_parameters, default_vals, ham_dict=None, exp
             circ = initial_circuit + circ
         return measure_ham_2(circ, ham_dict=ham_dict, explicit_H=explicit_H)
     return f
-
-
-
-
-
-############## old methods below
-
-
-def get_en(q, c, ham_string, TN, shots=1000, circuit=None, pre_applied_circ=None):
-    '''
-    Prepares the tensor network state and measures
-    the expected value of ham_string
-    ham_string denotes a tensor product of Pauli matrices
-    Only allowed to consist of I, X, Y, Z
-    '''
-    qasm_backend = Aer.get_backend('qasm_simulator')
-
-    if circuit is None:
-        circ = QuantumCircuit(q, c)
-    else:
-        circ = circuit
-        
-    #    circ = QuantumCircuit(q, c)
-
-    circ.data = []
-    if pre_applied_circ is not None:
-        circ.data = pre_applied_circ.data
-    TN.apply(q, circ)
-    
-    for i in range(len(ham_string)):
-        if ham_string[i] == 'X':
-            circ.h(q[i])
-        if ham_string[i] == 'Y':
-            circ.sdg(q[i])
-            circ.h(q[i])
-        if ham_string[i] != 'I':
-            circ.measure(q[i], c[i])
-    job = execute(circ, qasm_backend, shots=shots)
-    result = job.result()
-    answer = result.get_counts()
-    expected_en = 0
-    for key in answer.keys():
-        expected_en += answer[key] * (-1)**key.count('1') / shots
-    return expected_en
-
-def measure_ham(q, c, ham_dict, TN, shots=1000, circuit=None, explH=None, pre_applied_circ=None):
-    '''
-    params_dict contains entries like
-    "XIXZ": 0.234
-    '''
-    if circuit is None:
-        circ = QuantumCircuit(q, c)
-    else:
-        circ = circuit
-    
-    if TN.backend == "qasm_simulator":        
-        E = 0
-        for key, value in ham_dict.items():
-            E += value * get_en(q, c, key, TN, shots=shots, circuit=circ, pre_applied_circ=pre_applied_circ)
-    elif TN.backend == "statevector_simulator":
-#       circ = QuantumCircuit(q)
-        circ.data = []
-        if pre_applied_circ is not None:
-            circ.data = pre_applied_circ.data
-        TN.apply(q, circ)
-        sv_backend = Aer.get_backend("statevector_simulator")
-        job = execute(circ, sv_backend)
-        result = job.result()
-        state = result.get_statevector(circ)
-        state = array(state).reshape((2**TN.n_qubits, 1))
-        if explH is not None:
-            H = explH
-        else:
-            H = hamiltonians.explicit_hamiltonian(ham_dict)
-        E = (state.T.conj() @ H @ state)[0,0].real
-            
-    return E
-
-def restrained_objective(x, ham_dict, TN, block, q, c):
-    '''
-    Objective function when only one gate is unlocked
-    Not a pure function unfortunately. Works by updating TN
-    '''
-    assert(block <= TN.n_tensors)
-    block_size = TN.entangler.n_params
-    TN.params[block * block_size: (block + 1) * block_size] = x
-    return measure_ham(q, c, ham_dict, TN)
-
-def arb_index_objective(x, param_numbers, ham_dict, TN, q, c, circuit=None, explH=None):
-    '''Assign values to any subset of parameters and measure'''
-    for i, num in enumerate(param_numbers):
-        TN.params[num] = x[i]
-    return measure_ham(q, c, ham_dict, TN, circuit=circuit, explH=explH)
-
-def any_order_VQE(ham_dict, TN, tensor_order=None, n_calls=20, method="GP"):
-    """
-    Performs VQE by optimizing the tensor network in the order
-    supplied in tensor_order. The n_sweeps parameter is redundant as
-    one can simply send a duplicate of the tuple or call this function
-    again
-
-    :param ham_dict: Hamiltonian to minimize
-    :param TN: TensorNetwork used as ansatz
-    :param tensor_order: the order of tensors. Can be a tuple with
-    integers or tuples of integers. Integer means 'optimize this
-    tensor', tuple means 'optimize these tensors jointly'
-    :param method: method of optimization. Can be "GP", "local"
-    :returns: value of the function. The `res` object is of limited
-    meaning, the parameters are stored in TN
-
-    """
-
-    H = hamiltonians.explicit_hamiltonian(ham_dict)
-    if not isinstance(TN, TensorNetwork.TensorNetwork):
-        raise TypeError('Not a TensorNetwork')
-    
-    q = QuantumRegister(TN.n_qubits)
-    c = ClassicalRegister(TN.n_qubits)
-    circ = QuantumCircuit(q, c)
-
-    block_size = TN.entangler.n_params
-    n_entanglers = TN.n_tensors
-
-    if tensor_order is None:
-        order = tuple(i for i in range(n_entanglers))
-    else:
-        order = tensor_order
-
-    for v in order:
-        if isinstance(v, int):
-            param_numbers = [v * block_size + i for i in
-                             range(block_size)]
-        elif isinstance(v, tuple):
-            param_numbers = []
-            for j in v:
-                param_numbers += [j * block_size + i for i in
-                                  range(block_size)]
-        else:
-            raise TypeError('tensor_order should be a tuple or nested tuple')
-        print('Optimizing params', param_numbers, end=' -> ')
-        def f(x):
-            return arb_index_objective([float64(xi) for xi in x], param_numbers, ham_dict,
-                                       TN, q, c, circuit=circ, explH=H)
-        x0 = [TN.params[i] for i in param_numbers]
-        
-        res = gbrt_minimize(f, [(0, 2*pi)] * len(x0), x0=x0,
-                          n_calls=n_calls, verbose=False)
-        #res = shgo(f, [(0, 4*pi)] * len(x0))
-        
-        for i, num in enumerate(param_numbers):
-            TN.params[num] = res.x[i]
-        print('E = {0:0.4f}'.format(res.fun))
-
-    return res.fun
-
-
-
-def globalVQE(ham_dict, TN, initial_guess=None, n_calls=100, pre_applied_circ=None):
-    """Optimizes the TN by simultaneously changing all the parameters
-    """
-    q = QuantumRegister(TN.n_qubits)
-    c = ClassicalRegister(TN.n_qubits) 
-    def objective(x):
-        TN.params = x
-        return measure_ham(q, c, ham_dict, TN, pre_applied_circ=pre_applied_circ)
-
-    res = gbrt_minimize(objective, [(0, 2 * pi)] * TN.n_params, n_calls=n_calls, verbose=False, n_random_starts=30)
-    return res.fun
-
-#def globalVQE_with_prerun(ham_dict, TN, initial_guess=None, n_calls=100):
