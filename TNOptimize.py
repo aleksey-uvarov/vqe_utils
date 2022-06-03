@@ -1,19 +1,14 @@
-from skopt import gp_minimize, forest_minimize, gbrt_minimize
+from skopt import gp_minimize
 from scipy.optimize import minimize
 from qiskit import QuantumCircuit, Aer, execute
 from qiskit import QuantumRegister, ClassicalRegister
 import TensorNetwork
 from math import pi
-import TNOptimize
 import hamiltonians
 from numpy import array, float64, ndarray
-# from qiskit_qcgpu_provider import QCGPUProvider
-
-# Provider = QCGPUProvider()
-Provider = None
-
-
 from typing import Callable, List
+
+Provider = None
 
 sv_backend = Aer.get_backend("statevector_simulator")
 qasm_backend = Aer.get_backend("qasm_simulator")
